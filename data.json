@@ -1,0 +1,31 @@
+{
+ "simulated": true,
+ "note": "SIMULATED paper trading, virtual money only",
+ "generated": "2026-10-13 15:51:40Z",
+ "active": {
+  "strategy": "trend-4h-v1",
+  "equity_eur": 50.0,
+  "start_eur": 50.0,
+  "positions": {},
+  "trades": 0,
+  "realized_eur": 0.0,
+  "status": "OK",
+  "halted": false
+ },
+ "equity_curve": [
+  50.0,
+  50.0,
+  50.0,
+  50.0,
+  50.0,
+  50.0,
+  50.0
+ ],
+ "shadow": {
+  "strategy": "breakout-1h-v1",
+  "equity_eur": 50.0,
+  "positions": [],
+  "trades": 0,
+  "status": "OK"
+ }
+}
