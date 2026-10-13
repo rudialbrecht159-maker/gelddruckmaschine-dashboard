@@ -37,6 +37,19 @@ footer{color:var(--mut);font-size:11px;text-align:center;margin:20px 0}
 <div class="offline" id="offline"></div>
 <div class="offline" id="hfoff"></div>
 <div class="grid k" id="kpis"></div>
+<div class="card" style="margin-top:10px;border-color:#22d3ee55"><h3>Trading Session Mode <span class="mut" style="text-transform:none;letter-spacing:0">(separate paper portfolio · same limits · SIMULATED)</span></h3>
+<div class="grid main"><div><div id="sess"></div></div>
+<div class="card"><h3>New session (setup)</h3>
+<div style="display:grid;gap:8px;font-size:13px">
+<label>Virtual capital (€) <input id="sc" type="number" min="1" step="1" value="50" style="width:100%;background:#0a0f16;color:#e6edf3;border:1px solid #1e2633;border-radius:6px;padding:6px"></label>
+<label>Duration <select id="sd" style="width:100%;background:#0a0f16;color:#e6edf3;border:1px solid #1e2633;border-radius:6px;padding:6px"><option>10</option><option>15</option><option>30</option><option selected>60</option><option>120</option><option>180</option><option value="c">custom…</option></select></label>
+<input id="sdc" type="number" min="1" max="1440" placeholder="custom minutes (1–1440)" style="display:none;background:#0a0f16;color:#e6edf3;border:1px solid #1e2633;border-radius:6px;padding:6px">
+<label>Strategy <select id="ss" style="width:100%;background:#0a0f16;color:#e6edf3;border:1px solid #1e2633;border-radius:6px;padding:6px">
+<option value="trend-4h-v1">trend-4h-v1 — ACTIVE (validated OOS, weak, rare trades)</option><option value="breakout-1h-v1" selected>breakout-1h-v1 — SHADOW (robust family, short OOS)</option>
+<option value="test-breakout1h-filtered">test-breakout1h-filtered — TEST</option><option value="funding-fade-4h-x1">funding-fade-4h-x1 — EXPERIMENTAL (hold-out failed)</option>
+<option value="test-hf-zscore-5m">test-hf-zscore-5m — EXPERIMENTAL (backtest negative)</option></select></label>
+<div id="scmd" class="mut" style="font-size:11px;word-break:break-all;background:#0a0f16;border-radius:6px;padding:8px"></div>
+<div class="mut" style="font-size:11px">This page is static and holds <b>no credentials</b>: buttons only generate commands. Control (START/STOP) is only possible for the GitHub repo owner (workflow_dispatch, not yet activated) or on the bot box. No trade quota: a session may end with 0 trades.</div></div></div></div></div>
 <div class="grid main" style="margin-top:10px"><div class="card"><h3>Automation reliability (measured)</h3><div class="grid k" id="rel"></div><div class="scroll" style="margin-top:8px"><table id="relt"></table></div></div>
 <div class="card"><h3>Trading philosophy</h3><ul id="phil" style="margin:0;padding-left:18px;line-height:1.7"></ul></div></div>
 <div class="card" style="margin-top:10px"><h3>Activity layers — what is actually happening</h3><div class="grid k" id="layers"></div></div>
@@ -128,11 +141,28 @@ function rel(){const r=D.reliability;if(!r)return;
  <div class="card kv"><span>Manual runs (24h)</span><b>${r.manual_runs_24h}</b><span style="text-transform:none">${r.window}</span></div>`;
  $("relt").innerHTML="<tr><th>Slot (Berlin)</th><th>Actual run</th><th>Delay</th></tr>"+r.slots.slice().reverse().map(x=>`<tr><td>${loc(x.slot)}</td><td>${x.run?loc(x.run):'<span class=neg>MISSED</span>'}</td><td class="${x.delay_min>10?"neg":"pos"}">${x.delay_min==null?"–":x.delay_min+" min"}</td></tr>`).join("")+(r.hf_gaps.length?`<tr><td colspan=3 class=mut>HF gaps: ${r.hf_gaps.map(g=>g.from_+"→"+g.to+" ("+g.min+"m)").join(", ")}</td></tr>`:"");
  $("phil").innerHTML=D.philosophy.map(x=>`<li>${x}</li>`).join("")}
+let S=null;
+async function loadS(){try{S=await (await fetch("session.json?t="+Date.now(),{cache:"no-store"})).json()}catch(e){S=null}sessDraw()}
+function scmd(){const c=+$("sc").value||50,m=$("sd").value==="c"?(+$("sdc").value||10):+$("sd").value,st=$("ss").value;$("sdc").style.display=$("sd").value==="c"?"block":"none";
+ $("scmd").innerHTML=`<b>Via bot (box):</b><br>python session.py start --capital ${c} --minutes ${m} --strategy ${st} --publish<br>python session.py stop &nbsp;·&nbsp; python session.py close_all<br><br><b>Via GitHub (after approval, owner-only):</b><br>gh workflow run session.yml -f action=start -f capital=${c} -f minutes=${m} -f strategy=${st}<br>STOP: gh workflow run session.yml -f action=stop · Emergency: -f action=close_all`}
+function sessDraw(){const el=$("sess");if(!S||!S.session){el.innerHTML="<p class=mut>No session yet.</p>";return}
+ const s=S.session,p=S.portfolio||{},now=Date.now(),left=Math.max(0,(ms(s.ends_at)-now)/1000),hb=(now-s.heartbeat_ts*1000)/1000;
+ const col=s.status==="running"?"pos":s.status==="stopping"?"cy":"mut",stale=s.status!=="ended"&&hb>180;
+ let h=`<div class="grid k"><div class="card kv"><span>Status</span><b class="${stale?"neg":col}">${stale?"SESSION RUNNER OFFLINE / overdue":s.status_text}</b><span style="text-transform:none">id ${s.id} · host ${s.host} · heartbeat ${Math.round(hb)} s ago (published every ${s.publish_every_s/60} min + on events)</span></div>
+ <div class="card kv"><span>${s.status==="running"?"Time left":"Planned end"}</span><b>${s.status==="running"?Math.floor(left/60)+":"+String(Math.floor(left%60)).padStart(2,"0"):loc(s.ends_at)}</b><span style="text-transform:none">${s.minutes} min · started ${loc(s.started)}</span></div>
+ <div class="card kv"><span>Capital (virtual)</span><b>€${fmt(p.equity_eur??s.capital_eur,4)}</b><span class="${cls((p.equity_eur??s.capital_eur)-s.capital_eur)}" style="text-transform:none">start €${fmt(s.capital_eur,2)} · ${eur((p.equity_eur??s.capital_eur)-s.capital_eur)}</span></div>
+ <div class="card kv"><span>Strategy</span><b style="font-size:14px">${s.strategy}</b><span style="text-transform:none">${s.strategy_role} · ${s.strategy_tf} · loops ${s.loops} · errors ${s.errors} · resumes ${s.resumes||0}</span></div></div>`;
+ const pos=p.positions||[];h+=`<h3 style="margin-top:10px">Session positions</h3><div class=scroll><table><tr><th>Mkt</th><th>Side</th><th>Entry</th><th>Mark</th><th>Stop</th><th>Size</th><th>Lev</th><th>uPnL</th></tr>${pos.length?pos.map(q=>`<tr><td>${q.coin}</td><td class="${q.side==="LONG"?"pos":"neg"}">${q.side}</td><td>${px(q.entry)}</td><td>${px(q.mark)}</td><td>${px(q.stop)}</td><td>$${fmt(q.notional_usd)}</td><td>${q.lev}x</td><td class="${cls(q.upnl_eur)}">${eur(q.upnl_eur)}</td></tr>`).join(""):"<tr><td colspan=8 class=mut>flat</td></tr>"}</table></div>`;
+ const tr=p.trade_history||[];h+=`<h3 style="margin-top:10px">Session trades</h3><div class=scroll><table><tr><th>Mkt</th><th>Side</th><th>Open</th><th>Close</th><th>Hold</th><th>Gross</th><th>Fees</th><th>Fund</th><th>Net</th><th>Reason</th></tr>${tr.length?tr.map(t=>`<tr><td>${t.coin}</td><td>${t.side}</td><td>${loc(t.open_ts)}</td><td>${loc(t.close_ts)}</td><td>${fmt(t.hold_min,1)} min</td><td class="${cls(t.gross_eur)}">${eur(t.gross_eur)}</td><td>€${fmt(t.fees_eur,4)}</td><td>€${fmt(t.funding_eur,4)}</td><td class="${cls(t.pnl_eur)}">${eur(t.pnl_eur)}</td><td>${t.reason}</td></tr>`).join(""):"<tr><td colspan=10 class=mut>no trades</td></tr>"}</table></div>`;
+ const rj=(p.rejected||[]).slice(0,15);h+=`<h3 style="margin-top:10px">Session signal evaluations</h3><div class=scroll><table><tr><th>Time</th><th>Mkt</th><th>Outcome</th><th>Reason</th></tr>${rj.length?rj.map(r=>`<tr><td>${loc(r.ts)}</td><td>${r.coin}</td><td>${r.kind}</td><td style="white-space:normal">${r.reason}</td></tr>`).join(""):"<tr><td colspan=4 class=mut>none yet</td></tr>"}</table></div>`;
+ if(s.report){const r=s.report;h+=`<h3 style="margin-top:10px">Final report</h3><div class=scroll><table>${[["Start capital","€"+fmt(r.start_capital_eur,2)],["End capital","€"+fmt(r.end_capital_eur,4)],["Net P&L",eur(r.net_pnl_eur)+" ("+fmt(r.return_pct,3)+"%)"],["Gross P&L",eur(r.gross_pnl_eur)],["Fees / Funding","€"+fmt(r.fees_eur,4)+" / €"+fmt(r.funding_eur,4)],["Trades (wins)",r.trades+" ("+r.wins+")"],["Duration planned / actual",r.planned_minutes+" / "+r.actual_minutes+" min"],["Stop reason",r.stop_reason],["Loops / evaluations",r.loops+" / "+r.market_evaluations],["Started / ended",loc(r.started)+" → "+loc(r.ended)]].map(x=>`<tr><td class=mut>${x[0]}</td><td>${x[1]}</td></tr>`).join("")}</table></div>`}
+ el.innerHTML=h}
 function render(){rel();status();kpis();tabs();drawChart();ptabs();eqDraw();tables();layers()}
 async function poll(){try{const r=await fetch("https://api.hyperliquid.xyz/info",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"allMids"})});const j=await r.json();COINS.forEach(c=>{if(j[c])live[c]=+j[c]});liveOK=true;
  $("ldot").className="dot";$("lstate").textContent="live from Hyperliquid · "+new Date().toLocaleTimeString("de-DE",{timeZone:"Europe/Berlin"});
  COINS.forEach(c=>{const e=$("lp-"+c);if(e)e.textContent=px(live[c])});
  if(series&&live[coin]){if(liveLine)series.removePriceLine(liveLine);liveLine=series.createPriceLine({price:live[coin],color:"#22d3ee",lineWidth:1,lineStyle:2,axisLabelVisible:true,title:"live"})}
  document.querySelectorAll("td.live").forEach(()=>{});if(D)tables()}catch(e){$("ldot").className="dot off";$("lstate").textContent="live prices unavailable (showing cycle data)"}}
+["sc","sd","sdc","ss"].forEach(i=>$(i).addEventListener("input",scmd));scmd();loadS();setInterval(loadS,30000);setInterval(()=>S&&sessDraw(),1000);
 load();loadHF();setInterval(load,60000);setInterval(loadHF,60000);setInterval(()=>D&&layers(),15000);setInterval(()=>D&&status(),30000);poll();setInterval(poll,5000);
 </script></body></html>
