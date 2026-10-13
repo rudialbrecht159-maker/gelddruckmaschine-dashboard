@@ -75,7 +75,7 @@ function status(){const r=D.run,age=(Date.now()-(r.last_run_ms||D.generated_ms))
  $("steps").innerHTML=st;
  $("runs").innerHTML="<tr><th>Time (Berlin)</th><th>Trigger</th><th>Status</th></tr>"+r.history.slice(0,12).map(h=>`<tr><td>${loc(h.last_run)}</td><td class="mut">${h.trigger}</td><td class="${h.status==="OK"?"pos":"neg"}">${h.status}${h.errors.length?" ⚠":""}</td></tr>`).join("")}
 function kpis(){let h="";for(const p of D.portfolios){const pnl=p.equity_eur-p.start_eur;
- h+=`<div class="card kv"><span class="${p.role}">${p.role} · ${p.strategy}${p.role==="EXPERIMENTAL"?" ⚠ backtest negative":""}</span><b>€${fmt(p.equity_eur,4)}</b><span class="${cls(pnl)}" style="text-transform:none;font-size:13px;font-weight:700">${eur(pnl)} (${p.ret_pct>=0?"+":""}${fmt(p.ret_pct,3)}%)</span></div>`}
+ h+=`<div class="card kv"><span class="${p.role}">${p.role} · ${p.strategy}${p.strategy==="test-hf-zscore-5m"?" ⚠ backtest negative":p.strategy==="funding-fade-4h-x1"?" ⚠ best backtest so far, hold-out failed, low-moderate confidence":""}</span><b>€${fmt(p.equity_eur,4)}</b><span class="${cls(pnl)}" style="text-transform:none;font-size:13px;font-weight:700">${eur(pnl)} (${p.ret_pct>=0?"+":""}${fmt(p.ret_pct,3)}%)</span></div>`}
  const a=D.portfolios.find(p=>p.role==="ACTIVE")||D.portfolios[0];
  h+=`<div class="card kv"><span>Realized / Unrealized (active)</span><b><span class="${cls(a.realized_eur)}">${eur(a.realized_eur)}</span></b><span class="${cls(a.upnl_eur)}" style="text-transform:none">${eur(a.upnl_eur)} open</span></div>
  <div class="card kv"><span>Fees / Funding (active)</span><b>€${fmt(a.fees_eur,3)}</b><span style="text-transform:none">funding €${fmt(a.funding_eur,3)}</span></div>
