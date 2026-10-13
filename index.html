@@ -26,7 +26,7 @@ table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:ta
 .scroll{overflow-x:auto}.feed{max-height:520px;overflow-y:auto;font-size:12px}.ev{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)}
 .ev .t{color:var(--mut);font-variant-numeric:tabular-nums}.tag{font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;margin-right:6px;letter-spacing:.5px}
 .t-data{background:#0e3a46;color:var(--cy)}.t-eval{background:#1e2633;color:#a3adbb}.t-signal{background:#3b2f0a;color:var(--yl)}.t-skip{background:#3a1d0a;color:#fdba74}.t-entry{background:#0a3a1f;color:var(--gr)}.t-exit{background:#3b0a14;color:#fda4af}
-.ACTIVE{color:var(--cy)}.SHADOW{color:var(--mg)}.TEST{color:#fb923c}.badge{font-size:10px;font-weight:800;border:1px solid currentColor;border-radius:4px;padding:1px 5px}
+.EXPERIMENTAL{color:#f472b6}.ACTIVE{color:var(--cy)}.SHADOW{color:var(--mg)}.TEST{color:#fb923c}.badge{font-size:10px;font-weight:800;border:1px solid currentColor;border-radius:4px;padding:1px 5px}
 .steps{display:grid;gap:8px}.step{display:flex;justify-content:space-between;gap:8px;border-left:3px solid var(--cy);padding:6px 10px;background:#0a0f16;border-radius:6px}.step div:last-child{text-align:right;color:var(--mut);font-size:12px}
 .live{font-size:11px;color:var(--gr)}.cyc{font-size:11px;color:var(--mut)}.eqc{height:200px}
 footer{color:var(--mut);font-size:11px;text-align:center;margin:20px 0}
@@ -35,24 +35,27 @@ footer{color:var(--mut);font-size:11px;text-align:center;margin:20px 0}
 <header><div><h1>GELDDRUCKMASCHINE</h1><div class="sub">AI trading command center · Hyperliquid perps (paper) · BTC ETH SOL AVAX SUI</div></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="pill"><span id="bdot" class="dot"></span><span id="bstate">loading…</span></span><span class="pill" id="livepill"><span class="dot warn" id="ldot"></span><span id="lstate">live prices: connecting</span></span></div></header>
 <div class="offline" id="offline"></div>
+<div class="offline" id="hfoff"></div>
 <div class="grid k" id="kpis"></div>
+<div class="card" style="margin-top:10px"><h3>Activity layers — what is actually happening</h3><div class="grid k" id="layers"></div></div>
 <div class="grid main" style="margin-top:10px">
  <div class="card"><div class="tabs" id="tabs"></div>
   <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px"><div class="tabs" id="tftabs" style="margin:0"></div><div class="cyc" id="chartinfo"></div></div>
-  <div id="chart"></div><div class="cyc" style="margin-top:6px">Candles = real Hyperliquid candles from the last bot cycle. Markers: A = ACTIVE, S = SHADOW, T = TEST. ▲▼ = executed simulated entries/exits, ◆ = logged strategy signals. Dashed line = live mid (Hyperliquid, client-side).</div></div>
+  <div id="chart"></div><div class="cyc" style="margin-top:6px">Candles = real Hyperliquid candles from the last bot cycle. Markers: A = ACTIVE, S = SHADOW, T = TEST, E = EXPERIMENTAL (5m HF, backtest negative). ▲▼ = executed simulated entries/exits, ◆ = logged strategy signals. Dashed line = live mid (Hyperliquid, client-side).</div></div>
  <div class="card"><h3>Agent status</h3><div class="steps" id="steps"></div><h3 style="margin-top:14px">Run history</h3><div class="scroll"><table id="runs"></table></div></div>
 </div>
 <div class="grid main" style="margin-top:10px">
  <div class="card"><h3>Open positions (all portfolios)</h3><div class="scroll"><table id="positions"></table></div>
-  <h3 style="margin-top:14px">Equity curves (simulated)</h3><div id="eq" class="eqc"></div>
+  <h3 style="margin-top:14px">Equity curve (simulated)</h3><div class="tabs" id="ptabs"></div><div id="eq" class="eqc"></div>
   <h3 style="margin-top:14px">Portfolio / strategy comparison</h3><div class="scroll"><table id="cmp"></table></div></div>
  <div class="card"><h3>AI activity feed <span class="mut" style="text-transform:none;letter-spacing:0">(real logged events only)</span></h3><div class="feed" id="feed"></div></div>
 </div>
 <div class="card" style="margin-top:10px"><h3>Markets</h3><div class="scroll"><table id="mkts"></table></div></div>
-<div class="card" style="margin-top:10px"><h3>Trade history (all portfolios)</h3><div class="scroll"><table id="trades"></table></div></div>
+<div class="card" style="margin-top:10px"><h3>Analyzed &amp; rejected signals <span class="mut" style="text-transform:none;letter-spacing:0">(from logs, selected portfolio tab)</span></h3><div class="scroll" style="max-height:360px;overflow-y:auto"><table id="rej"></table></div></div>
+<div class="card" style="margin-top:10px"><h3>Trade history (<span id="thsel">all portfolios</span>)</h3><div class="scroll"><table id="trades"></table></div></div>
 <footer id="foot"></footer></div>
 <script>
-const COINS=["BTC","ETH","SOL","AVAX","SUI"];let D=null,coin="BTC",tf="4h",chart,series,liveLine,eqChart,live={},liveOK=false;
+const COINS=["BTC","ETH","SOL","AVAX","SUI"];let H=null,PF="ALL",D=null,coin="BTC",tf="4h",chart,series,liveLine,eqChart,live={},liveOK=false;
 const $=id=>document.getElementById(id),fmt=(v,d=2)=>v==null?"–":Number(v).toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d}),
 px=v=>v==null?"–":(v>=1000?fmt(v,1):v>=10?fmt(v,3):fmt(v,4)),eur=v=>(v>=0?"+":"")+"€"+fmt(v,4),cls=v=>v>=0?"pos":"neg",
 ms=s=>Date.parse(s.replace(" ","T")),loc=s=>s?new Date(ms(s)).toLocaleString("de-DE",{timeZone:"Europe/Berlin",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"–",
@@ -70,7 +73,7 @@ function status(){const r=D.run,age=(Date.now()-(r.last_run_ms||D.generated_ms))
  $("steps").innerHTML=st;
  $("runs").innerHTML="<tr><th>Time (Berlin)</th><th>Trigger</th><th>Status</th></tr>"+r.history.slice(0,12).map(h=>`<tr><td>${loc(h.last_run)}</td><td class="mut">${h.trigger}</td><td class="${h.status==="OK"?"pos":"neg"}">${h.status}${h.errors.length?" ⚠":""}</td></tr>`).join("")}
 function kpis(){let h="";for(const p of D.portfolios){const pnl=p.equity_eur-p.start_eur;
- h+=`<div class="card kv"><span class="${p.role}">${p.role} · ${p.strategy}</span><b>€${fmt(p.equity_eur,4)}</b><span class="${cls(pnl)}" style="text-transform:none;font-size:13px;font-weight:700">${eur(pnl)} (${p.ret_pct>=0?"+":""}${fmt(p.ret_pct,3)}%)</span></div>`}
+ h+=`<div class="card kv"><span class="${p.role}">${p.role} · ${p.strategy}${p.role==="EXPERIMENTAL"?" ⚠ backtest negative":""}</span><b>€${fmt(p.equity_eur,4)}</b><span class="${cls(pnl)}" style="text-transform:none;font-size:13px;font-weight:700">${eur(pnl)} (${p.ret_pct>=0?"+":""}${fmt(p.ret_pct,3)}%)</span></div>`}
  const a=D.portfolios.find(p=>p.role==="ACTIVE")||D.portfolios[0];
  h+=`<div class="card kv"><span>Realized / Unrealized (active)</span><b><span class="${cls(a.realized_eur)}">${eur(a.realized_eur)}</span></b><span class="${cls(a.upnl_eur)}" style="text-transform:none">${eur(a.upnl_eur)} open</span></div>
  <div class="card kv"><span>Fees / Funding (active)</span><b>€${fmt(a.fees_eur,3)}</b><span style="text-transform:none">funding €${fmt(a.funding_eur,3)}</span></div>
@@ -85,7 +88,7 @@ function drawChart(){const el=$("chart");if(!window.LightweightCharts){el.innerH
  const raw=(D.candles[tf]||{})[coin]||[];series.setData(raw.map(k=>({time:k[0]/1000,open:k[1],high:k[2],low:k[3],close:k[4]})));
  const ivs=tf==="1h"?3600:14400,mk=[],t0=raw.length?raw[0][0]/1000:0,snap=t=>Math.floor(t/ivs)*ivs;
  for(const m of (D.markers[coin]||[])){const t=snap(ms(m.ts)/1000);if(t<t0)continue;const L=m.side==="LONG";
-  mk.push(m.type==="entry"?{time:t,position:L?"belowBar":"aboveBar",color:{ACTIVE:"#22d3ee",SHADOW:"#c084fc",TEST:"#fb923c"}[m.port]||"#94a3b8",shape:L?"arrowUp":"arrowDown",text:`${m.port[0]} ${m.side} @${px(m.price)}`}
+  mk.push(m.type==="entry"?{time:t,position:L?"belowBar":"aboveBar",color:{ACTIVE:"#22d3ee",SHADOW:"#c084fc",TEST:"#fb923c",EXPERIMENTAL:"#f472b6"}[m.port]||"#94a3b8",shape:L?"arrowUp":"arrowDown",text:`${m.port[0]} ${m.side} @${px(m.price)}`}
    :{time:t,position:L?"aboveBar":"belowBar",color:"#facc15",shape:"circle",text:`exit ${m.reason} ${m.pnl>=0?"+":""}€${fmt(m.pnl,3)}`})}
  for(const s of (D.signal_markers[coin]||[])){if(s.tf!==tf)continue;const t=snap(ms(s.bar)/1000-ivs);if(t<t0)continue;mk.push({time:t,position:s.side==="LONG"?"belowBar":"aboveBar",color:s.blocked?"#fdba74":"#facc15",shape:"square",text:`◆ ${s.port[0]} ${s.side} signal${s.blocked?" (blocked)":""}`})}
  mk.sort((a,b)=>a.time-b.time);series.setMarkers(mk);
@@ -94,20 +97,33 @@ function drawChart(){const el=$("chart");if(!window.LightweightCharts){el.innerH
  $("chartinfo").textContent=`${coin}-PERP ${tf} · ${raw.length} candles · cycle data fetched ${loc(D.candles[tf+"_fetched"])}`}
 function eqDraw(){const el=$("eq");if(!window.LightweightCharts)return;if(!eqChart)eqChart=LightweightCharts.createChart(el,{layout:{background:{color:"transparent"},textColor:"#9aa4b2"},grid:{vertLines:{visible:false},horzLines:{color:"#141a24"}},timeScale:{timeVisible:true,borderColor:"#1e2633"},rightPriceScale:{borderColor:"#1e2633"},autoSize:true});
  if(eqChart._s)eqChart._s.forEach(s=>eqChart.removeSeries(s));eqChart._s=[];
- for(const p of D.portfolios){const s=eqChart.addLineSeries({color:{ACTIVE:"#22d3ee",SHADOW:"#c084fc",TEST:"#fb923c"}[p.role]||"#94a3b8",lineWidth:2,title:p.role});const seen=new Map();p.equity_curve.forEach(([t,v])=>seen.set(Math.floor(ms(t)/1000),v));s.setData([...seen].sort((a,b)=>a[0]-b[0]).map(([t,v])=>({time:t,value:v})));eqChart._s.push(s)}eqChart.timeScale().fitContent()}
+ for(const p of selP()){const s=eqChart.addLineSeries({color:{ACTIVE:"#22d3ee",SHADOW:"#c084fc",TEST:"#fb923c",EXPERIMENTAL:"#f472b6"}[p.role]||"#94a3b8",lineWidth:2,title:p.role});const seen=new Map();p.equity_curve.forEach(([t,v])=>seen.set(Math.floor(ms(t)/1000),v));s.setData([...seen].sort((a,b)=>a[0]-b[0]).map(([t,v])=>({time:t,value:v})));eqChart._s.push(s)}eqChart.timeScale().fitContent()}
 function tables(){const pos=D.portfolios.flatMap(p=>p.positions.map(q=>({...q,role:p.role})));
  $("positions").innerHTML="<tr><th>Pf</th><th>Mkt</th><th>Side</th><th>Entry</th><th>Mark (cycle)</th><th>Live</th><th>Size</th><th>Lev</th><th>Stop</th><th>Liq≈</th><th>uPnL</th><th>Fees/Fund</th></tr>"+(pos.length?pos.map(q=>`<tr><td class="${q.role}">${q.role}</td><td>${q.coin}</td><td class="${q.side==="LONG"?"pos":"neg"}">${q.side}</td><td>${px(q.entry)}</td><td>${px(q.mark)}</td><td class="live">${px(live[q.coin])}</td><td>$${fmt(q.notional_usd)}</td><td>${q.lev}x</td><td>${px(q.stop)}</td><td>${px(q.liq)}</td><td class="${cls(q.upnl_eur)}">${eur(q.upnl_eur)}</td><td>€${fmt(q.fees_eur,3)} / €${fmt(q.funding_eur,3)}</td></tr>`).join(""):`<tr><td colspan=12 class=mut>No open positions — all portfolios flat (no qualifying signal).</td></tr>`);
  $("cmp").innerHTML="<tr><th>Portfolio</th><th>Strategy</th><th>TF</th><th>Equity</th><th>Return</th><th>Realized</th><th>MaxDD</th><th>Trades</th><th>Win</th><th>PF</th><th>Status</th></tr>"+D.portfolios.map(p=>`<tr><td><span class="badge ${p.role}">${p.role}</span></td><td>${p.strategy}<br><span class=mut>${JSON.stringify(p.params)}</span></td><td>${p.tf}</td><td>€${fmt(p.equity_eur,4)}</td><td class="${cls(p.ret_pct)}">${fmt(p.ret_pct,3)}%</td><td class="${cls(p.realized_eur)}">${eur(p.realized_eur)}</td><td>${fmt(p.maxdd_pct,2)}%</td><td>${p.trades}</td><td>${p.win_rate==null?"–":p.win_rate+"%"}</td><td>${p.pf??"–"}</td><td>${p.halted?"HALTED":p.status}</td></tr>`).join("");
- const tr=D.portfolios.flatMap(p=>p.trade_history.map(t=>({...t,role:p.role}))).sort((a,b)=>b.close_ts.localeCompare(a.close_ts));
+ const rj=selP().flatMap(p=>p.rejected.map(r=>({...r,role:p.role}))).sort((a,b)=>b.ts.localeCompare(a.ts)).slice(0,80);
+ $("rej").innerHTML="<tr><th>Time</th><th>Pf</th><th>Mkt</th><th>Outcome</th><th>Reason</th><th>Evaluation</th></tr>"+(rj.length?rj.map(r=>`<tr><td>${loc(r.ts)}</td><td class="${r.role}">${r.role}</td><td>${r.coin}</td><td>${r.kind}</td><td style="white-space:normal">${r.reason}</td><td class="mut" style="white-space:normal">${r.text}</td></tr>`).join(""):"<tr><td colspan=6 class=mut>No evaluations logged yet.</td></tr>");
+ const tr=selP().flatMap(p=>p.trade_history.map(t=>({...t,role:p.role}))).sort((a,b)=>b.close_ts.localeCompare(a.close_ts));
  $("trades").innerHTML="<tr><th>Pf</th><th>Mkt</th><th>Side</th><th>Open</th><th>Close</th><th>Entry</th><th>Exit</th><th>Lev</th><th>Fees</th><th>Funding</th><th>Net</th><th>Reason</th></tr>"+(tr.length?tr.map(t=>`<tr><td class="${t.role}">${t.role}</td><td>${t.coin}</td><td>${t.side}</td><td>${loc(t.open_ts)}</td><td>${loc(t.close_ts)}</td><td>${px(t.entry)}</td><td>${px(t.exit)}</td><td>${t.lev}x</td><td>€${fmt(t.fees_eur,3)}</td><td>€${fmt(t.funding_eur,3)}</td><td class="${cls(t.pnl_eur)}">${eur(t.pnl_eur)}</td><td>${t.reason}</td></tr>`).join(""):`<tr><td colspan=12 class=mut>No closed simulated trades yet.</td></tr>`);
  $("mkts").innerHTML="<tr><th>Market</th><th>Live mid</th><th>Cycle mid</th><th>Spread</th><th>Funding / h</th><th>Open interest</th><th>24h volume</th></tr>"+COINS.map(c=>{const m=D.market[c]||{};return `<tr><td><b>${c}</b>-PERP</td><td class="live">${px(live[c])}</td><td>${px(m.mid)}</td><td>${fmt(m.spread_bps,2)} bps</td><td class="${cls(-(m.funding_1h||0))}">${fmt((m.funding_1h||0)*100,4)}%</td><td>${fmt(m.oi,0)}</td><td>$${fmt((m.dayVlm||0)/1e6,1)}M</td></tr>`}).join("");
  $("feed").innerHTML=D.feed.map(e=>`<div class="ev"><div class="t">${loc(e.ts).split(", ").join("<br>")}</div><div><span class="tag t-${e.kind}">${e.kind.toUpperCase()}</span><span class="mut">${e.port.split(" ")[0]}</span> ${e.coin?"<b>"+e.coin+"</b> ":""}${e.text}</div></div>`).join("")||"<p class=mut>No events yet.</p>";
  $("foot").innerHTML=`${D.disclaimer}<br>data.json generated ${loc(D.generated)} Berlin · schedule: ${D.run.schedule} · auto-reload every 60 s · live prices every 5 s`}
-function render(){status();kpis();tabs();drawChart();eqDraw();tables()}
+function ptabs(){$("ptabs").innerHTML=["ALL",...D.portfolios.map(p=>p.role)].map(r=>`<div class="tab ${r===PF?"on":""} ${r}" onclick="PF='${r}';ptabs();eqDraw();tables()">${r}</div>`).join("");$("thsel").textContent=PF==="ALL"?"all portfolios":PF}
+const selP=()=>D.portfolios.filter(p=>PF==="ALL"||p.role===PF);
+function hfAge(){return H?(Date.now()-H.ts_ms)/1000:null}
+function layers(){const a=hfAge(),thr=H?(H.publish_every_s+180):780,off=a==null||a>thr;
+ const ex=D.portfolios.reduce((s,p)=>s+p.trades,0),op=D.portfolios.reduce((s,p)=>s+p.positions.length,0),ev=D.portfolios.reduce((s,p)=>s+p.evals.market_evaluations,0);
+ $("layers").innerHTML=`<div class="card kv"><span>(a) Live price updates</span><b class="${liveOK?"pos":"neg"}">${liveOK?"every 5 s":"offline"}</b><span style="text-transform:none">client-side from Hyperliquid allMids · display only, no trading decisions</span></div>
+ <div class="card kv"><span>(b1) Hourly cycle evaluations</span><b>${ev}</b><span style="text-transform:none">market evaluations across ${D.portfolios.length} portfolios · last ${loc(D.run.last_run)}</span></div>
+ <div class="card kv"><span>(b2) HF runner (60 s loop)</span><b class="${off?"neg":"pos"}">${H?H.loops+" loops":"–"}</b><span style="text-transform:none">${H?`${H.strategy?H.strategy_evals_total+" strategy evals":"no strategy loaded — monitoring only (0 evals)"} · heartbeat ${loc(H.ts)} (${Math.round(a/60)} min ago) · errors ${H.errors}`:"hf.json not available"}</span></div>
+ <div class="card kv"><span>(c) Executed simulated trades</span><b>${ex}</b><span style="text-transform:none">closed trades · ${op} open positions</span></div>`;
+ const o=$("hfoff");o.style.display=off?"block":"none";o.textContent=off?`HF RUNNER OFFLINE — last heartbeat ${H?loc(H.ts)+" ("+Math.round(a/60)+" min ago)":"never"}. (Public page sees heartbeats published every ${H?H.publish_every_s/60:10} min, flagged after publish interval + 3 min.)`:""}
+async function loadHF(){try{H=await (await fetch("hf.json?t="+Date.now(),{cache:"no-store"})).json()}catch(e){H=null}if(D)layers()}
+function render(){status();kpis();tabs();drawChart();ptabs();eqDraw();tables();layers()}
 async function poll(){try{const r=await fetch("https://api.hyperliquid.xyz/info",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"allMids"})});const j=await r.json();COINS.forEach(c=>{if(j[c])live[c]=+j[c]});liveOK=true;
  $("ldot").className="dot";$("lstate").textContent="live from Hyperliquid · "+new Date().toLocaleTimeString("de-DE",{timeZone:"Europe/Berlin"});
  COINS.forEach(c=>{const e=$("lp-"+c);if(e)e.textContent=px(live[c])});
  if(series&&live[coin]){if(liveLine)series.removePriceLine(liveLine);liveLine=series.createPriceLine({price:live[coin],color:"#22d3ee",lineWidth:1,lineStyle:2,axisLabelVisible:true,title:"live"})}
  document.querySelectorAll("td.live").forEach(()=>{});if(D)tables()}catch(e){$("ldot").className="dot off";$("lstate").textContent="live prices unavailable (showing cycle data)"}}
-load();setInterval(load,60000);setInterval(()=>D&&status(),30000);poll();setInterval(poll,5000);
+load();loadHF();setInterval(load,60000);setInterval(loadHF,60000);setInterval(()=>D&&layers(),15000);setInterval(()=>D&&status(),30000);poll();setInterval(poll,5000);
 </script></body></html>
